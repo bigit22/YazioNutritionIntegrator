@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     bot_token: str
-    admin_user_ids: list[int] = Field(default_factory=list)
+    allowed_user_ids: list[int] = Field(default_factory=list)
     webhook_base_url: str = ""
     webhook_secret: str = ""
     webhook_path: str = "/webhook/telegram"
@@ -29,9 +29,9 @@ class Settings(BaseSettings):
 
     request_timeout: float = 30.0
 
-    @field_validator("admin_user_ids", mode="before")
+    @field_validator("allowed_user_ids", mode="before")
     @classmethod
-    def parse_admin_user_ids(cls, value):
+    def parse_allowed_user_ids(cls, value):
         if isinstance(value, list):
             return [int(x) for x in value]
         if isinstance(value, str):

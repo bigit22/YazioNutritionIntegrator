@@ -23,20 +23,17 @@ repo = MealRepository()
 
 
 @router.message(CommandStart())
-async def cmd_start(msg: Message, is_admin: bool = False):
-    text = "👋 Send me a photo of your food or a text description!"
-    if is_admin:
-        text += "\n\n<i>You are an admin. Use /admin to manage users.</i>"
-    await msg.answer(text)
+async def cmd_start(msg: Message):
+    await msg.answer("👋 Send me a photo of your food or a text description!")
 
 
 @router.message(Command("today"))
-async def cmd_today(msg: Message, is_admin: bool = False):
+async def cmd_today(msg: Message):
     await show_summary(msg, msg.from_user.id)
 
 
 @router.message(F.photo | F.text)
-async def process_meal(msg: Message, is_admin: bool = False):
+async def process_meal(msg: Message):
     if msg.text and msg.text.startswith("/"):
         return
     processing = await msg.answer("🔄 Analyzing...")
@@ -82,7 +79,7 @@ async def process_meal(msg: Message, is_admin: bool = False):
 
 
 @router.callback_query(F.data.startswith("meal:"))
-async def meal_callbacks(cb: CallbackQuery, is_admin: bool = False):
+async def meal_callbacks(cb: CallbackQuery):
     action, meal_id = cb.data.split(":")[1:]
     meal = await repo.get_meal(meal_id, cb.from_user.id)
     if not meal or meal.get("deleted_at"):
@@ -118,7 +115,7 @@ async def meal_callbacks(cb: CallbackQuery, is_admin: bool = False):
 
 
 @router.callback_query(F.data == "summary")
-async def cb_summary(cb: CallbackQuery, is_admin: bool = False):
+async def cb_summary(cb: CallbackQuery):
     await show_summary(cb.message, cb.from_user.id, edit=True)
     await cb.answer()
 

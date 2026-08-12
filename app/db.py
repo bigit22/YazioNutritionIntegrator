@@ -36,15 +36,6 @@ CREATE TABLE IF NOT EXISTS meal_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_meal_logs_user_consumed_at
     ON meal_logs (telegram_user_id, consumed_at DESC);
-
-CREATE TABLE IF NOT EXISTS allowed_users (
-    telegram_user_id BIGINT PRIMARY KEY,
-    username TEXT,
-    first_name TEXT,
-    added_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    added_by BIGINT NOT NULL,
-    note TEXT
-);
 """
 
 
@@ -229,58 +220,3 @@ class MealRepository:
             "carbs": float(row["carbs"]),
             "meal_count": int(row["meal_count"]),
         }
-
-
-class UsersRepository:
-    async def is_allowed(self, telegram_user_id: int) -> bool:
-        pool = get_pool()
-        async with pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT 1 FROM allowed_users WHERE telegram_user_id = $1",
-                telegram_user_id,
-            )
-        return row is not None
-
-    async def add_user(
-            self,
-            telegram_user_id: int,
-            added_by: int,
-            username: str | None = None,
-            first_name: str | None = None,
-            note: str | None = None,
-    ) -> bool:
-        pool = get_pool()
-        async with pool.acquire() as conn:
-            try:
-                await conn.execute(
-                    """
-                    INSERT INTO allowed_users
-                        (telegram_user_id, username, first_name, added_by, note)
-                    VALUES ($1, $2, $3, $4, $5)
-                    """,
-                    telegram_user_id, username, first_name, added_by, note,
-                )
-                return True
-            except asyncpg.UniqueViolationError:
-                return False
-
-    async def remove_user(self, telegram_user_id: int) -> bool:
-        pool = get_pool()
-        async with pool.acquire() as conn:
-            result = await conn.execute(
-                "DELETE FROM allowed_users WHERE telegram_user_id = $1",
-                telegram_user_id,
-            )
-        return result.endswith(" 1")
-
-    async def list_users(self) -> list[dict]:
-        pool = get_pool()
-        async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                """
-                SELECT telegram_user_id, username, first_name, added_at, note
-                FROM allowed_users
-                ORDER BY added_at ASC
-                """
-            )
-        return [dict(r) for r in rows]
