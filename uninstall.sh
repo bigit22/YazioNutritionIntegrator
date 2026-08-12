@@ -15,10 +15,10 @@ warn() { echo -e "${Y}!${N} $1"; }
 
 [[ $EUID -eq 0 ]] && { echo "Do NOT run as root"; exit 1; }
 
-# Get domain (may fail if .env is gone — that's ok)
+# Get domain from .env (may fail — that's ok)
 DOMAIN=""
 if [[ -f "$PROJECT_DIR/.env" ]]; then
-    set -a; source "$PROJECT_DIR/.env"; set +a
+    WEBHOOK_BASE_URL="$(grep -E '^WEBHOOK_BASE_URL=' "$PROJECT_DIR/.env" | head -n1 | cut -d'=' -f2- | tr -d '"' | tr -d "'")"
     DOMAIN="$(echo "${WEBHOOK_BASE_URL:-}" | sed -E 's~https?://~~; s~/.*~~')"
 fi
 

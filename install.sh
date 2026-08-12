@@ -47,11 +47,8 @@ if [[ ! -f "$PROJECT_DIR/.env" ]]; then
 fi
 ok ".env exists"
 
-# Load .env for domain/user extraction
-set -a
-source "$PROJECT_DIR/.env"
-set +a
-
+# Extract WEBHOOK_BASE_URL from .env (without sourcing — .env may contain shell-unsafe chars)
+WEBHOOK_BASE_URL="$(grep -E '^WEBHOOK_BASE_URL=' "$PROJECT_DIR/.env" | head -n1 | cut -d'=' -f2- | tr -d '"' | tr -d "'")"
 DOMAIN="$(echo "$WEBHOOK_BASE_URL" | sed -E 's~https?://~~; s~/.*~~')"
 [[ -z "$DOMAIN" ]] && err "WEBHOOK_BASE_URL is empty in .env"
 ok "Domain: $DOMAIN"
