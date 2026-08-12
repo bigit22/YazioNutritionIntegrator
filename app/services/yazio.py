@@ -14,6 +14,8 @@ class YazioService:
         return h
 
     async def create_consumed_item(self, meal: dict, daytime: str) -> tuple[str, dict]:
+        import logging
+        logger = logging.getLogger(__name__)
         remote_id = str(uuid4()).upper()
         payload = {
             "products": [], "recipe_portions": [],
@@ -29,10 +31,14 @@ class YazioService:
                 "daytime": daytime, "is_ai_generated": False
             }]
         }
+        logger.info("Yazio payload: %s", json.dumps(payload))
         async with httpx.AsyncClient(timeout=settings.request_timeout, http2=True) as client:
             resp = await client.post(f"{settings.yazio_base_url}/user/consumed-items",
                                      headers=self._headers("application/json"), json=payload)
             resp.raise_for_status()
+            if resp.status_code >= 400:
+                logger.error("Yazio %s: %s", resp.status_code, resp.text)
+                resp.raise_for_status()
         return remote_id.lower(), payload
 
     async def delete_consumed_item(self, remote_id: str) -> None:
