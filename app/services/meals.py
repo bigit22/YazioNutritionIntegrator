@@ -30,7 +30,7 @@ def yazio_daytime(meal_type: str) -> str:
         "breakfast": "breakfast",
         "lunch": "lunch",
         "dinner": "dinner",
-        "snack": "snacks",
+        "snack": "snack",
     }.get(meal_type, "snacks")
 
 

@@ -48,6 +48,11 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/")
+async def root():
+    return {"service": "yazio-nutrition-integrator", "status": "ok"}
+
+
 @app.post(settings.webhook_path)
 async def telegram_webhook(request: Request) -> Response:
     if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != settings.webhook_secret:
