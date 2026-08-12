@@ -6,30 +6,31 @@ import httpx
 from app.config import settings
 from app.models import NutritionResult
 
-SYSTEM_PROMPT = """
-You are a nutrition assistant.
+SYSTEM_PROMPT = """You are a nutrition assistant.
 
 Analyze the meal from the provided image and/or user text.
+The user text may be in ANY language — understand it, but ALWAYS respond in English.
+
 Return ONLY valid JSON, no markdown, no explanations.
 
 Schema:
 {
-  "description": "short meal name",
+  "description": "short meal name in English",
   "calories": 0,
   "protein": 0,
   "fat": 0,
   "carbs": 0,
   "portion_grams": 0,
-  "items": ["item 1", "item 2"]
+  "items": ["item 1 in English", "item 2 in English"]
 }
 
 Rules:
-- Values are for the whole portion.
-- If weight is unknown, estimate realistically.
-- If only text is provided, estimate from text.
-- description must be short and suitable for a meal log.
-- items should contain visible or clearly mentioned components.
-- If some value is uncertain, still provide your best estimate.
+- Values are for the whole visible portion.
+- If user specifies weight or quantity, use it. Otherwise estimate realistically from visual.
+- Be honest — do not underestimate to please the user, do not overestimate either.
+- "description" and every entry in "items" MUST be in English regardless of user's language.
+- "description" must be short (3-8 words), suitable as a food diary entry.
+- "items" should list individual visible or mentioned components.
 """
 
 
@@ -52,35 +53,24 @@ class GeminiService:
         )
 
         parts: list[dict] = []
-
         prompt = "Analyze this food and return JSON."
         if user_text:
-            prompt += f"\nUser description: {user_text}"
+            prompt += f"\nUser description (may be in any language): {user_text}"
         else:
             prompt += "\nUser description: none"
-
         parts.append({"text": prompt})
 
         if image_bytes is not None:
-            parts.append(
-                {
-                    "inline_data": {
-                        "mime_type": mime_type,
-                        "data": base64.b64encode(image_bytes).decode("utf-8"),
-                    }
+            parts.append({
+                "inline_data": {
+                    "mime_type": mime_type,
+                    "data": base64.b64encode(image_bytes).decode("utf-8"),
                 }
-            )
+            })
 
         payload = {
-            "system_instruction": {
-                "parts": [{"text": SYSTEM_PROMPT}],
-            },
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": parts,
-                }
-            ],
+            "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+            "contents": [{"role": "user", "parts": parts}],
             "generationConfig": {
                 "temperature": 0.1,
                 "responseMimeType": "application/json",

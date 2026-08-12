@@ -1,15 +1,21 @@
 import io
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from aiogram import F, Router
-from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, CallbackQuery
+from aiogram.filters import Command, CommandStart
+from aiogram.types import CallbackQuery, Message
 
-from app.bot.keyboards import meal_keyboard, confirm_delete_keyboard, back_keyboard
+from app.bot.keyboards import back_keyboard, confirm_delete_keyboard, meal_keyboard
 from app.db import MealRepository
 from app.services.gemini import gemini_service
-from app.services.meals import detect_meal_type, format_meal_card, yazio_daytime, format_copy_view, \
-    format_daily_summary, to_user_tz
+from app.services.meals import (
+    detect_meal_type,
+    format_copy_view,
+    format_daily_summary,
+    format_meal_card,
+    to_user_tz,
+    yazio_daytime,
+)
 from app.services.yazio import yazio_service
 
 router = Router()
@@ -17,18 +23,22 @@ repo = MealRepository()
 
 
 @router.message(CommandStart())
-async def cmd_start(msg: Message):
-    await msg.answer("👋 Send me a photo of your food or a text description!")
+async def cmd_start(msg: Message, is_admin: bool = False):
+    text = "👋 Send me a photo of your food or a text description!"
+    if is_admin:
+        text += "\n\n<i>You are an admin. Use /admin to manage users.</i>"
+    await msg.answer(text)
 
 
 @router.message(Command("today"))
-async def cmd_today(msg: Message):
+async def cmd_today(msg: Message, is_admin: bool = False):
     await show_summary(msg, msg.from_user.id)
 
 
 @router.message(F.photo | F.text)
-async def process_meal(msg: Message):
-    if msg.text and msg.text.startswith("/"): return
+async def process_meal(msg: Message, is_admin: bool = False):
+    if msg.text and msg.text.startswith("/"):
+        return
     processing = await msg.answer("🔄 Analyzing...")
     try:
         image_bytes = None
@@ -42,28 +52,41 @@ async def process_meal(msg: Message):
         consumed_at = msg.date.replace(tzinfo=timezone.utc)
         meal_type = detect_meal_type(consumed_at)
 
-        nutrition = await gemini_service.analyze(user_text=user_text, image_bytes=image_bytes)
-        meal = await repo.create_meal(telegram_user_id=msg.from_user.id, chat_id=msg.chat.id,
-                                      source_message_id=msg.message_id, meal_type=meal_type.value, user_text=user_text,
-                                      nutrition=nutrition, consumed_at=consumed_at)
+        nutrition = await gemini_service.analyze(
+            user_text=user_text, image_bytes=image_bytes
+        )
+        meal = await repo.create_meal(
+            telegram_user_id=msg.from_user.id,
+            chat_id=msg.chat.id,
+            source_message_id=msg.message_id,
+            meal_type=meal_type.value,
+            user_text=user_text,
+            nutrition=nutrition,
+            consumed_at=consumed_at,
+        )
 
         try:
-            remote_id, payload = await yazio_service.create_consumed_item(meal, yazio_daytime(meal["meal_type"]))
+            remote_id, payload = await yazio_service.create_consumed_item(
+                meal, yazio_daytime(meal["meal_type"])
+            )
             await repo.mark_yazio_synced(meal["id"], remote_id, payload)
         except Exception as e:
             await repo.mark_yazio_error(meal["id"], str(e))
 
         final_meal = await repo.get_meal(meal["id"], msg.from_user.id)
-        await processing.edit_text(format_meal_card(final_meal), reply_markup=meal_keyboard(final_meal))
+        await processing.edit_text(
+            format_meal_card(final_meal), reply_markup=meal_keyboard(final_meal)
+        )
     except Exception as e:
         await processing.edit_text(f"❌ Error: {str(e)}")
 
 
 @router.callback_query(F.data.startswith("meal:"))
-async def meal_callbacks(cb: CallbackQuery):
+async def meal_callbacks(cb: CallbackQuery, is_admin: bool = False):
     action, meal_id = cb.data.split(":")[1:]
     meal = await repo.get_meal(meal_id, cb.from_user.id)
-    if not meal or meal.get("deleted_at"): return await cb.answer("Meal not found")
+    if not meal or meal.get("deleted_at"):
+        return await cb.answer("Meal not found")
 
     if action == "copy":
         await cb.message.edit_text(format_copy_view(meal), reply_markup=back_keyboard(meal_id))
@@ -75,29 +98,32 @@ async def meal_callbacks(cb: CallbackQuery):
         if meal.get("yazio_consumed_item_id"):
             try:
                 await yazio_service.delete_consumed_item(meal["yazio_consumed_item_id"])
-            except:
+            except Exception:
                 return await cb.answer("Failed to delete from Yazio")
         await repo.soft_delete_meal(meal_id)
         await cb.message.edit_text("🗑 <b>Meal deleted</b>")
     elif action == "sync":
         try:
-            remote_id, payload = await yazio_service.create_consumed_item(meal, yazio_daytime(meal["meal_type"]))
+            remote_id, payload = await yazio_service.create_consumed_item(
+                meal, yazio_daytime(meal["meal_type"])
+            )
             await repo.mark_yazio_synced(meal["id"], remote_id, payload)
             upd_meal = await repo.get_meal(meal_id, cb.from_user.id)
-            await cb.message.edit_text(format_meal_card(upd_meal), reply_markup=meal_keyboard(upd_meal))
+            await cb.message.edit_text(
+                format_meal_card(upd_meal), reply_markup=meal_keyboard(upd_meal)
+            )
         except Exception as e:
             await cb.answer(f"Sync failed: {e}", show_alert=True)
     await cb.answer()
 
 
 @router.callback_query(F.data == "summary")
-async def cb_summary(cb: CallbackQuery):
+async def cb_summary(cb: CallbackQuery, is_admin: bool = False):
     await show_summary(cb.message, cb.from_user.id, edit=True)
     await cb.answer()
 
 
 async def show_summary(msg: Message, user_id: int, edit: bool = False):
-    from datetime import timedelta
     now_utc = datetime.now(timezone.utc)
     local_now = to_user_tz(now_utc)
     start_local = local_now.replace(hour=0, minute=0, second=0, microsecond=0)

@@ -34,7 +34,17 @@ CREATE TABLE IF NOT EXISTS meal_logs (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     deleted_at TIMESTAMPTZ
 );
-CREATE INDEX IF NOT EXISTS idx_meal_logs_user_consumed_at ON meal_logs (telegram_user_id, consumed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_meal_logs_user_consumed_at
+    ON meal_logs (telegram_user_id, consumed_at DESC);
+
+CREATE TABLE IF NOT EXISTS allowed_users (
+    telegram_user_id BIGINT PRIMARY KEY,
+    username TEXT,
+    first_name TEXT,
+    added_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    added_by BIGINT NOT NULL,
+    note TEXT
+);
 """
 
 
@@ -54,19 +64,24 @@ async def close_db() -> None:
 
 
 def get_pool() -> asyncpg.Pool:
-    if _pool is None: raise RuntimeError("Database pool is not initialized")
+    if _pool is None:
+        raise RuntimeError("Database pool is not initialized")
     return _pool
 
 
 def _parse_json(value: Any, default: Any) -> Any:
-    if value is None: return default
-    if isinstance(value, (dict, list)): return value
-    if isinstance(value, str): return json.loads(value)
+    if value is None:
+        return default
+    if isinstance(value, (dict, list)):
+        return value
+    if isinstance(value, str):
+        return json.loads(value)
     return value
 
 
 def _row_to_meal(row: asyncpg.Record | None) -> dict | None:
-    if row is None: return None
+    if row is None:
+        return None
     return {
         "id": str(row["id"]),
         "telegram_user_id": row["telegram_user_id"],
@@ -78,7 +93,9 @@ def _row_to_meal(row: asyncpg.Record | None) -> dict | None:
         "carbs": row["carbs"],
         "portion_grams": row["portion_grams"],
         "items": _parse_json(row["items"], []),
-        "yazio_consumed_item_id": str(row["yazio_consumed_item_id"]) if row["yazio_consumed_item_id"] else None,
+        "yazio_consumed_item_id": str(row["yazio_consumed_item_id"])
+        if row["yazio_consumed_item_id"]
+        else None,
         "yazio_synced_at": row["yazio_synced_at"],
         "yazio_last_error": row["yazio_last_error"],
         "consumed_at": row["consumed_at"],
@@ -87,59 +104,183 @@ def _row_to_meal(row: asyncpg.Record | None) -> dict | None:
 
 
 class MealRepository:
-    async def create_meal(self, *, telegram_user_id: int, chat_id: int, source_message_id: int, meal_type: str,
-                          user_text: str | None, nutrition: NutritionResult, consumed_at: datetime) -> dict:
+    async def create_meal(
+            self,
+            *,
+            telegram_user_id: int,
+            chat_id: int,
+            source_message_id: int,
+            meal_type: str,
+            user_text: str | None,
+            nutrition: NutritionResult,
+            consumed_at: datetime,
+    ) -> dict:
         meal_id = uuid4()
-        query = """INSERT INTO meal_logs (id, telegram_user_id, chat_id, source_message_id, meal_type, description, user_text, calories, protein, fat, carbs, portion_grams, items, ai_raw, consumed_at)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb, $15) RETURNING *"""
+        query = """
+            INSERT INTO meal_logs (
+                id, telegram_user_id, chat_id, source_message_id, meal_type,
+                description, user_text, calories, protein, fat, carbs,
+                portion_grams, items, ai_raw, consumed_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+                    $12, $13::jsonb, $14::jsonb, $15)
+            RETURNING *
+        """
         pool = get_pool()
         async with pool.acquire() as conn:
-            row = await conn.fetchrow(query, meal_id, telegram_user_id, chat_id, source_message_id, meal_type,
-                                      nutrition.description, user_text, float(nutrition.calories),
-                                      float(nutrition.protein), float(nutrition.fat), float(nutrition.carbs),
-                                      float(nutrition.portion_grams) if nutrition.portion_grams is not None else None,
-                                      json.dumps(nutrition.items), nutrition.model_dump_json(), consumed_at)
+            row = await conn.fetchrow(
+                query,
+                meal_id, telegram_user_id, chat_id, source_message_id, meal_type,
+                nutrition.description, user_text,
+                float(nutrition.calories), float(nutrition.protein),
+                float(nutrition.fat), float(nutrition.carbs),
+                float(nutrition.portion_grams) if nutrition.portion_grams is not None else None,
+                json.dumps(nutrition.items),
+                nutrition.model_dump_json(),
+                consumed_at,
+            )
         return _row_to_meal(row)
 
     async def get_meal(self, meal_id: str, telegram_user_id: int) -> dict | None:
         pool = get_pool()
         async with pool.acquire() as conn:
-            row = await conn.fetchrow("SELECT * FROM meal_logs WHERE id = $1 AND telegram_user_id = $2 LIMIT 1",
-                                      UUID(meal_id), telegram_user_id)
+            row = await conn.fetchrow(
+                "SELECT * FROM meal_logs WHERE id = $1 AND telegram_user_id = $2 LIMIT 1",
+                UUID(meal_id), telegram_user_id,
+            )
         return _row_to_meal(row)
 
     async def mark_yazio_synced(self, meal_id: str, remote_id: str, payload: dict) -> None:
         pool = get_pool()
         async with pool.acquire() as conn:
             await conn.execute(
-                "UPDATE meal_logs SET yazio_consumed_item_id = $2, yazio_synced_at = $3, yazio_payload = $4::jsonb, yazio_last_error = NULL WHERE id = $1",
-                UUID(meal_id), UUID(remote_id), datetime.now(timezone.utc), json.dumps(payload))
+                """
+                UPDATE meal_logs
+                SET yazio_consumed_item_id = $2,
+                    yazio_synced_at = $3,
+                    yazio_payload = $4::jsonb,
+                    yazio_last_error = NULL
+                WHERE id = $1
+                """,
+                UUID(meal_id), UUID(remote_id),
+                datetime.now(timezone.utc),
+                json.dumps(payload),
+            )
 
     async def mark_yazio_error(self, meal_id: str, error_text: str) -> None:
         pool = get_pool()
         async with pool.acquire() as conn:
-            await conn.execute("UPDATE meal_logs SET yazio_last_error = $2 WHERE id = $1", UUID(meal_id),
-                               error_text[:500])
+            await conn.execute(
+                "UPDATE meal_logs SET yazio_last_error = $2 WHERE id = $1",
+                UUID(meal_id), error_text[:500],
+            )
 
     async def soft_delete_meal(self, meal_id: str) -> None:
         pool = get_pool()
         async with pool.acquire() as conn:
-            await conn.execute("UPDATE meal_logs SET deleted_at = $2 WHERE id = $1", UUID(meal_id),
-                               datetime.now(timezone.utc))
+            await conn.execute(
+                "UPDATE meal_logs SET deleted_at = $2 WHERE id = $1",
+                UUID(meal_id), datetime.now(timezone.utc),
+            )
 
-    async def list_day_meals(self, telegram_user_id: int, start_dt: datetime, end_dt: datetime) -> list[dict]:
+    async def list_day_meals(
+            self, telegram_user_id: int, start_dt: datetime, end_dt: datetime
+    ) -> list[dict]:
         pool = get_pool()
         async with pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT * FROM meal_logs WHERE telegram_user_id = $1 AND deleted_at IS NULL AND consumed_at >= $2 AND consumed_at < $3 ORDER BY consumed_at ASC",
-                telegram_user_id, start_dt, end_dt)
+                """
+                SELECT * FROM meal_logs
+                WHERE telegram_user_id = $1
+                  AND deleted_at IS NULL
+                  AND consumed_at >= $2
+                  AND consumed_at < $3
+                ORDER BY consumed_at ASC
+                """,
+                telegram_user_id, start_dt, end_dt,
+            )
         return [_row_to_meal(r) for r in rows if r is not None]
 
-    async def get_day_totals(self, telegram_user_id: int, start_dt: datetime, end_dt: datetime) -> dict:
+    async def get_day_totals(
+            self, telegram_user_id: int, start_dt: datetime, end_dt: datetime
+    ) -> dict:
         pool = get_pool()
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT COALESCE(SUM(calories), 0) AS calories, COALESCE(SUM(protein), 0) AS protein, COALESCE(SUM(fat), 0) AS fat, COALESCE(SUM(carbs), 0) AS carbs, COUNT(*)::int AS meal_count FROM meal_logs WHERE telegram_user_id = $1 AND deleted_at IS NULL AND consumed_at >= $2 AND consumed_at < $3",
-                telegram_user_id, start_dt, end_dt)
-        return {"calories": float(row["calories"]), "protein": float(row["protein"]), "fat": float(row["fat"]),
-                "carbs": float(row["carbs"]), "meal_count": int(row["meal_count"])}
+                """
+                SELECT
+                    COALESCE(SUM(calories), 0) AS calories,
+                    COALESCE(SUM(protein), 0) AS protein,
+                    COALESCE(SUM(fat), 0) AS fat,
+                    COALESCE(SUM(carbs), 0) AS carbs,
+                    COUNT(*)::int AS meal_count
+                FROM meal_logs
+                WHERE telegram_user_id = $1
+                  AND deleted_at IS NULL
+                  AND consumed_at >= $2
+                  AND consumed_at < $3
+                """,
+                telegram_user_id, start_dt, end_dt,
+            )
+        return {
+            "calories": float(row["calories"]),
+            "protein": float(row["protein"]),
+            "fat": float(row["fat"]),
+            "carbs": float(row["carbs"]),
+            "meal_count": int(row["meal_count"]),
+        }
+
+
+class UsersRepository:
+    async def is_allowed(self, telegram_user_id: int) -> bool:
+        pool = get_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT 1 FROM allowed_users WHERE telegram_user_id = $1",
+                telegram_user_id,
+            )
+        return row is not None
+
+    async def add_user(
+            self,
+            telegram_user_id: int,
+            added_by: int,
+            username: str | None = None,
+            first_name: str | None = None,
+            note: str | None = None,
+    ) -> bool:
+        pool = get_pool()
+        async with pool.acquire() as conn:
+            try:
+                await conn.execute(
+                    """
+                    INSERT INTO allowed_users
+                        (telegram_user_id, username, first_name, added_by, note)
+                    VALUES ($1, $2, $3, $4, $5)
+                    """,
+                    telegram_user_id, username, first_name, added_by, note,
+                )
+                return True
+            except asyncpg.UniqueViolationError:
+                return False
+
+    async def remove_user(self, telegram_user_id: int) -> bool:
+        pool = get_pool()
+        async with pool.acquire() as conn:
+            result = await conn.execute(
+                "DELETE FROM allowed_users WHERE telegram_user_id = $1",
+                telegram_user_id,
+            )
+        return result.endswith(" 1")
+
+    async def list_users(self) -> list[dict]:
+        pool = get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT telegram_user_id, username, first_name, added_at, note
+                FROM allowed_users
+                ORDER BY added_at ASC
+                """
+            )
+        return [dict(r) for r in rows]
