@@ -51,6 +51,13 @@ If auto-sync fails, get a copy-friendly text to paste into Yazio's own AI parser
   <img src="docs/copy-view.png" width="500">
 </p>
 
+### Access Denied
+Bot silently ignores unauthorized users and shows them their Telegram ID so they can request access.
+
+<p align="center">
+  <img src="docs/access-denied.png" width="500">
+</p>
+
 ---
 
 ## 🏗️ Tech Stack

@@ -5,7 +5,12 @@ from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, Message
 
-from app.bot.keyboards import back_keyboard, confirm_delete_keyboard, meal_keyboard
+from app.bot.keyboards import (
+    back_keyboard,
+    confirm_delete_keyboard,
+    meal_keyboard,
+    summary_from_meal_keyboard,
+)
 from app.db import MealRepository
 from app.services.gemini import gemini_service
 from app.services.meals import (
@@ -13,6 +18,7 @@ from app.services.meals import (
     format_copy_view,
     format_daily_summary,
     format_meal_card,
+    format_meal_card_delete_confirm,
     to_user_tz,
     yazio_daytime,
 )
@@ -29,7 +35,9 @@ async def cmd_start(msg: Message):
 
 @router.message(Command("today"))
 async def cmd_today(msg: Message):
-    await show_summary(msg, msg.from_user.id)
+    """Standalone /today — no back button (nowhere to go back)."""
+    text = await _build_summary_text(msg.from_user.id)
+    await msg.answer(text)
 
 
 @router.message(F.photo | F.text)
@@ -86,11 +94,18 @@ async def meal_callbacks(cb: CallbackQuery):
         return await cb.answer("Meal not found")
 
     if action == "copy":
-        await cb.message.edit_text(format_copy_view(meal), reply_markup=back_keyboard(meal_id))
+        await cb.message.edit_text(
+            format_copy_view(meal), reply_markup=back_keyboard(meal_id)
+        )
     elif action == "back":
-        await cb.message.edit_text(format_meal_card(meal), reply_markup=meal_keyboard(meal))
+        await cb.message.edit_text(
+            format_meal_card(meal), reply_markup=meal_keyboard(meal)
+        )
     elif action == "delete":
-        await cb.message.edit_reply_markup(reply_markup=confirm_delete_keyboard(meal_id))
+        await cb.message.edit_text(
+            format_meal_card_delete_confirm(meal),
+            reply_markup=confirm_delete_keyboard(meal_id),
+        )
     elif action == "confirm_delete":
         if meal.get("yazio_consumed_item_id"):
             try:
@@ -111,16 +126,15 @@ async def meal_callbacks(cb: CallbackQuery):
             )
         except Exception as e:
             await cb.answer(f"Sync failed: {e}", show_alert=True)
+    elif action == "today":
+        text = await _build_summary_text(cb.from_user.id)
+        await cb.message.edit_text(
+            text, reply_markup=summary_from_meal_keyboard(meal_id)
+        )
     await cb.answer()
 
 
-@router.callback_query(F.data == "summary")
-async def cb_summary(cb: CallbackQuery):
-    await show_summary(cb.message, cb.from_user.id, edit=True)
-    await cb.answer()
-
-
-async def show_summary(msg: Message, user_id: int, edit: bool = False):
+async def _build_summary_text(user_id: int) -> str:
     now_utc = datetime.now(timezone.utc)
     local_now = to_user_tz(now_utc)
     start_local = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -128,9 +142,4 @@ async def show_summary(msg: Message, user_id: int, edit: bool = False):
 
     meals = await repo.list_day_meals(user_id, start_local, end_local)
     totals = await repo.get_day_totals(user_id, start_local, end_local)
-    text = format_daily_summary(meals, totals, now_utc)
-
-    if edit:
-        await msg.edit_text(text)
-    else:
-        await msg.answer(text)
+    return format_daily_summary(meals, totals, now_utc)

@@ -100,3 +100,9 @@ def format_daily_summary(meals: list[dict], totals: dict, now_utc: datetime) -> 
     lines.append(f"🧈 Fat: <b>{totals['fat']:.1f}</b> g")
     lines.append(f"🍚 Carbs: <b>{totals['carbs']:.1f}</b> g")
     return "\n".join(lines)
+
+
+def format_meal_card_delete_confirm(meal: dict) -> str:
+    """Meal card with a delete confirmation question at the bottom."""
+    base = format_meal_card(meal)
+    return f"{base}\n\n⚠️ <b>Delete this meal?</b>"
