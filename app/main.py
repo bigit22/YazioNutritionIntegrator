@@ -31,6 +31,11 @@ async def lifespan(_: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 @app.post(settings.webhook_path)
 async def telegram_webhook(request: Request) -> Response:
     if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != settings.webhook_secret:
