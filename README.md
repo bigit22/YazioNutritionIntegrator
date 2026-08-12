@@ -1,7 +1,7 @@
 # 🍽️ Yazio Nutrition Integrator
 
 > A Telegram bot that analyzes food photos with Google Gemini and automatically syncs meals to your **Yazio** food
-> diary with no subscription.
+> diary — no subscription required.
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white" alt="Python">
@@ -31,6 +31,7 @@
 ## 📸 Screenshots
 
 ### Meal Analysis
+
 Send a food photo with optional description — get an instant nutritional breakdown and one-tap sync to Yazio.
 
 <p align="center">
@@ -38,6 +39,7 @@ Send a food photo with optional description — get an instant nutritional break
 </p>
 
 ### Daily Summary
+
 Use `/today` to see all your meals and totals for the day.
 
 <p align="center">
@@ -45,6 +47,7 @@ Use `/today` to see all your meals and totals for the day.
 </p>
 
 ### Copy for Yazio AI
+
 If auto-sync fails, get a copy-friendly text to paste into Yazio's own AI parser.
 
 <p align="center">
@@ -52,6 +55,7 @@ If auto-sync fails, get a copy-friendly text to paste into Yazio's own AI parser
 </p>
 
 ### Access Denied
+
 Bot silently ignores unauthorized users and shows them their Telegram ID so they can request access.
 
 <p align="center">
@@ -66,11 +70,11 @@ Bot silently ignores unauthorized users and shows them their Telegram ID so they
 |-------------------|-----------------------------------------------------------------------------------|
 | **Bot framework** | [aiogram 3](https://docs.aiogram.dev/)                                            |
 | **Web server**    | [FastAPI](https://fastapi.tiangolo.com/) + [Uvicorn](https://www.uvicorn.org/)    |
-| **AI model**      | [Google Gemini](https://ai.google.dev/) (2.0 Flash)                               |
+| **AI model**      | [Google Gemini](https://ai.google.dev/) (3.5 Flash Lite)                          |
 | **Database**      | PostgreSQL + [asyncpg](https://github.com/MagicStack/asyncpg)                     |
 | **HTTP client**   | [httpx](https://www.python-httpx.org/) (with HTTP/2)                              |
 | **Config**        | [pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) |
-| **Deployment**    | systemd + nginx + Let's Encrypt                                                   |
+| **Deployment**    | systemd + nginx + Let's Encrypt (auto-configured via `make install`)              |
 
 ---
 
@@ -78,9 +82,9 @@ Bot silently ignores unauthorized users and shows them their Telegram ID so they
 
 ### Prerequisites
 
+- Ubuntu 22.04+ (or any Debian-based distro)
 - Python 3.11+
-- PostgreSQL
-- Public HTTPS endpoint (for Telegram webhook)
+- A domain name pointing to your server (needed for HTTPS webhook)
 - Telegram Bot Token → [@BotFather](https://t.me/BotFather)
 - Google Gemini API Key → [Google AI Studio](https://aistudio.google.com/apikey)
 - Yazio Bearer Token → see [How to get Yazio token](#-how-to-get-yazio-bearer-token)
@@ -88,41 +92,67 @@ Bot silently ignores unauthorized users and shows them their Telegram ID so they
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/YazioNutritionIntegrator.git
+git clone https://github.com/bigit22/YazioNutritionIntegrator.git
 cd YazioNutritionIntegrator
 ```
 
-### 2. Create virtual environment
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-### 3. Set up PostgreSQL
-
-```bash
-sudo -u postgres psql -c "CREATE USER foodbot WITH PASSWORD 'foodbotpass';"
-sudo -u postgres psql -c "CREATE DATABASE foodbot OWNER foodbot;"
-```
-
-### 4. Configure environment
+### 2. Configure
 
 ```bash
 cp .env.example .env
-nano .env
+nano .env  # fill in your tokens and settings
 ```
 
-Fill in all the required values (see [Configuration](#️-configuration)).
+See [Configuration](#️-configuration) for details.
 
-### 5. Run
+### 3. Install everything
 
 ```bash
-uvicorn app.main:app --host 127.0.0.1 --port 8000
+make install
 ```
 
-If deployed behind nginx with SSL, the bot will automatically register its webhook on startup.
+This single command will:
+
+- Install system packages (PostgreSQL, nginx, certbot)
+- Create the database and user
+- Set up a Python virtual environment and install dependencies
+- Register a systemd service
+- Configure nginx + Let's Encrypt SSL
+- Start the bot
+
+### 4. Verify
+
+```bash
+make status       # check that the service is running
+make logs         # follow logs in real time
+```
+
+Open your bot in Telegram, send `/start` — done ✅
+
+---
+
+## 🛠️ Management
+
+All operations are wrapped in a `Makefile` for convenience:
+
+| Command          | Description                                                   |
+|------------------|---------------------------------------------------------------|
+| `make install`   | Install everything from scratch (idempotent — safe to re-run) |
+| `make deploy`    | Pull latest code from `main`, reinstall deps, restart service |
+| `make restart`   | Restart the bot service                                       |
+| `make logs`      | Tail service logs                                             |
+| `make status`    | Show systemd service status                                   |
+| `make stop`      | Stop the service                                              |
+| `make start`     | Start the service                                             |
+| `make uninstall` | Remove everything (systemd, nginx, SSL, DB) — keeps source    |
+
+### Redeploy from your local machine
+
+After pushing changes to `main`, redeploy with a single SSH command:
+
+```bash
+ssh user@server "cd YazioNutritionIntegrator && make deploy"
+```
 
 ---
 
@@ -130,18 +160,18 @@ If deployed behind nginx with SSL, the bot will automatically register its webho
 
 All settings live in `.env`.
 
-| Variable             | Description                                                   | Example                                       |
-|----------------------|---------------------------------------------------------------|-----------------------------------------------|
-| `BOT_TOKEN`          | Telegram bot token from BotFather                             | `123456:ABC...`                               |
-| `ALLOWED_USER_IDS`   | JSON array of your Telegram account IDs which can use the bot | `[123456789]`                                 |
-| `WEBHOOK_BASE_URL`   | Your server's HTTPS URL                                       | `https://your-domain.com`                     |
-| `WEBHOOK_SECRET`     | Random string for webhook verification                        | `super-secret-string`                         |
-| `DATABASE_URL`       | PostgreSQL connection string                                  | `postgresql://foodbot:pass@127.0.0.1/foodbot` |
-| `GEMINI_API_KEY`     | Google Gemini API key                                         | `AIza...`                                     |
-| `GEMINI_MODEL`       | Gemini model name                                             | `gemini-2.0-flash`                            |
-| `USER_TIMEZONE`      | IANA timezone for meal detection                              | `Asia/Krasnoyarsk`                            |
-| `YAZIO_BEARER_TOKEN` | Your Yazio bearer token                                       | `c7bbe97050...`                               |
-| `YAZIO_USER_AGENT`   | User-Agent header (mimics Yazio iOS app)                      | `YAZIO/26.31.0 ...`                           |
+| Variable             | Description                                            | Example                                       |
+|----------------------|--------------------------------------------------------|-----------------------------------------------|
+| `BOT_TOKEN`          | Telegram bot token from BotFather                      | `123456:ABC...`                               |
+| `ALLOWED_USER_IDS`   | JSON array of Telegram user IDs allowed to use the bot | `[123456789]`                                 |
+| `WEBHOOK_BASE_URL`   | Your server's HTTPS URL                                | `https://your-domain.com`                     |
+| `WEBHOOK_SECRET`     | Random string for webhook verification                 | `super-secret-string`                         |
+| `DATABASE_URL`       | PostgreSQL connection string                           | `postgresql://foodbot:pass@127.0.0.1/foodbot` |
+| `GEMINI_API_KEY`     | Google Gemini API key                                  | `AIza...`                                     |
+| `GEMINI_MODEL`       | Gemini model name                                      | `gemini-3.5-flash-lite`                       |
+| `USER_TIMEZONE`      | IANA timezone for meal detection                       | `Asia/Krasnoyarsk`                            |
+| `YAZIO_BEARER_TOKEN` | Your Yazio bearer token                                | `c7bbe97050...`                               |
+| `YAZIO_USER_AGENT`   | User-Agent header (mimics Yazio iOS app)               | `YAZIO/26.31.0 ...`                           |
 
 ---
 
@@ -195,101 +225,11 @@ You'll need to intercept your Yazio app traffic once to extract the bearer token
 
 ### Token expiration
 
-Tokens don't last forever. When you see `⚠️ Not synced` errors in the bot with a 401 message, just repeat the extraction
-and update `YAZIO_BEARER_TOKEN`.
-
----
-
-## 🖥️ Production Deployment
-
-### 1. systemd service
-
-```ini
-# /etc/systemd/system/food-tracker-bot.service
-[Unit]
-Description = Yazio Nutrition Integrator
-After = network-online.target postgresql.service
-Wants = network-online.target
-
-[Service]
-User = your_user
-WorkingDirectory = /home/your_user/YazioNutritionIntegrator
-Environment = PYTHONUNBUFFERED=1
-ExecStart = /home/your_user/YazioNutritionIntegrator/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
-Restart = always
-RestartSec = 3
-
-[Install]
-WantedBy = multi-user.target
-```
+Tokens don't last forever. When you see `⚠️ Not synced` errors in the bot with a 401 message, just repeat the
+extraction, update `YAZIO_BEARER_TOKEN` in `.env`, and run:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now food-tracker-bot
-```
-
-### 2. nginx reverse proxy
-
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-
-    client_max_body_size 20M;
-
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-### 3. Let's Encrypt SSL
-
-```bash
-sudo certbot --nginx -d your-domain.com
-```
-
-### 4. One-command redeploy
-
-```bash
-# deploy.sh
-#!/usr/bin/env bash
-set -euo pipefail
-
-cd "$(dirname "$0")"
-
-echo "== Pull latest code =="
-git fetch origin main
-git reset --hard origin/main
-
-echo "== Install deps =="
-./.venv/bin/pip install --quiet -r requirements.txt
-
-echo "== Restart service =="
-sudo /bin/systemctl restart food-tracker-bot
-
-echo "== Done =="
-```
-
-Add sudoers rule to allow restart without password:
-
-```bash
-sudo visudo -f /etc/sudoers.d/food-tracker-bot
-```
-
-```
-your_user ALL=(ALL) NOPASSWD: /bin/systemctl restart food-tracker-bot
-```
-
-Now you can redeploy with a single SSH command:
-
-```bash
-ssh user@server "cd YazioNutritionIntegrator && ./deploy.sh"
+make restart
 ```
 
 ---
@@ -308,12 +248,16 @@ YazioNutritionIntegrator/
 │   │   ├── meals.py          # Formatting & meal-type logic
 │   │   └── yazio.py          # Yazio API client
 │   ├── config.py             # Pydantic settings
-│   ├── db.py                 # asyncpg pool + repository
+│   ├── db.py                 # asyncpg pool + repositories
 │   ├── models.py             # Domain models
 │   └── main.py               # FastAPI app + webhook
-├── deploy.sh                 # Redeploy script
+├── docs/                     # Screenshots for README
+├── install.sh                # One-command installer
+├── uninstall.sh              # One-command uninstaller
+├── Makefile                  # Convenience commands
 ├── requirements.txt
 ├── .env.example
+├── LICENSE
 └── README.md
 ```
 
