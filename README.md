@@ -30,28 +30,27 @@
 
 ## 📸 Screenshots
 
-<table>
-  <tr>
-    <td align="center">
-      <img src="docs/meal-analysis.png" width="300"><br>
-      <b>Meal Analysis</b>
-    </td>
-    <td align="center">
-      <img src="docs/daily-summary.png" width="300"><br>
-      <b>Daily Summary</b>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="docs/copy-view.png" width="300"><br>
-      <b>Copy for Yazio AI</b>
-    </td>
-    <td align="center">
-      <img src="docs/yazio-proof.png" width="300"><br>
-      <b>Synced to Yazio</b>
-    </td>
-  </tr>
-</table>
+### Meal Analysis
+Send a food photo with optional description — get an instant nutritional breakdown and one-tap sync to Yazio.
+
+<p align="center">
+  <img src="docs/meal-analysis.png" width="500">
+</p>
+
+### Daily Summary
+Use `/today` to see all your meals and totals for the day.
+
+<p align="center">
+  <img src="docs/daily-summary.png" width="500">
+</p>
+
+### Copy for Yazio AI
+If auto-sync fails, get a copy-friendly text to paste into Yazio's own AI parser.
+
+<p align="center">
+  <img src="docs/copy-view.png" width="500">
+</p>
+
 ---
 
 ## 🏗️ Tech Stack
