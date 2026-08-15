@@ -8,6 +8,10 @@ updates:
     commit-message:
       prefix: "chore"
       include: "scope"
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -15,3 +19,7 @@ updates:
       interval: "monthly"
     commit-message:
       prefix: "ci"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
