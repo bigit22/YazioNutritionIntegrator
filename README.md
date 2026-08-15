@@ -287,12 +287,10 @@ YazioNutritionIntegrator/
 
 ## 🗺️ Roadmap
 
-- [x] Automatic Yazio token refresh
-- [ ] Per-user Yazio credentials (bring-your-own-token)
-- [ ] Meal reminders
-- [ ] Weekly / monthly summary
-- [ ] Image compression before Gemini upload
-- [ ] Docker Compose setup
+Planned features and current progress live on the [project board](https://github.com/users/bigit22/projects/1).
+
+Recently shipped:
+- ✅ Automatic Yazio token refresh
 
 ---
 
