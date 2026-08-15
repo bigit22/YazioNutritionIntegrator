@@ -88,7 +88,7 @@ Bot silently ignores unauthorized users and shows them their Telegram ID so they
 - A domain name pointing to your server (needed for HTTPS webhook)
 - Telegram Bot Token → [@BotFather](https://t.me/BotFather)
 - Google Gemini API Key → [Google AI Studio](https://aistudio.google.com/apikey)
-- Yazio Bearer Token → see [How to get Yazio token](#-how-to-get-yazio-bearer-token)
+- Yazio account + ability to run mitmproxy once → see [How to get Yazio tokens](#-how-to-get-yazio-tokens)
 
 ### 1. Clone the repo
 
@@ -121,7 +121,11 @@ This single command will:
 - Configure nginx + Let's Encrypt SSL
 - Start the bot
 
-### 4. Verify
+### 4. Seed Yazio tokens (one-time)
+
+See [How to get Yazio tokens](#-how-to-get-yazio-tokens) below.
+
+### 5. Verify
 
 ```bash
 make status       # check that the service is running
@@ -161,18 +165,19 @@ ssh user@server "cd YazioNutritionIntegrator && make deploy"
 
 All settings live in `.env`.
 
-| Variable             | Description                                            | Example                                       |
-|----------------------|--------------------------------------------------------|-----------------------------------------------|
-| `BOT_TOKEN`          | Telegram bot token from BotFather                      | `123456:ABC...`                               |
-| `ALLOWED_USER_IDS`   | JSON array of Telegram user IDs allowed to use the bot | `[123456789]`                                 |
-| `WEBHOOK_BASE_URL`   | Your server's HTTPS URL                                | `https://your-domain.com`                     |
-| `WEBHOOK_SECRET`     | Random string for webhook verification                 | `super-secret-string`                         |
-| `DATABASE_URL`       | PostgreSQL connection string                           | `postgresql://foodbot:pass@127.0.0.1/foodbot` |
-| `GEMINI_API_KEY`     | Google Gemini API key                                  | `AIza...`                                     |
-| `GEMINI_MODEL`       | Gemini model name                                      | `gemini-3.5-flash-lite`                       |
-| `USER_TIMEZONE`      | IANA timezone for meal detection                       | `Asia/Krasnoyarsk`                            |
-| `YAZIO_BEARER_TOKEN` | Your Yazio bearer token                                | `c7bbe97050...`                               |
-| `YAZIO_USER_AGENT`   | User-Agent header (mimics Yazio iOS app)               | `YAZIO/26.31.0 ...`                           |
+| Variable           | Description                                            | Example                                       |
+|--------------------|--------------------------------------------------------|-----------------------------------------------|
+| `BOT_TOKEN`        | Telegram bot token from BotFather                      | `123456:ABC...`                               |
+| `ALLOWED_USER_IDS` | JSON array of Telegram user IDs allowed to use the bot | `[123456789]`                                 |
+| `WEBHOOK_BASE_URL` | Your server's HTTPS URL                                | `https://your-domain.com`                     |
+| `WEBHOOK_SECRET`   | Random string for webhook verification                 | `super-secret-string`                         |
+| `DATABASE_URL`     | PostgreSQL connection string                           | `postgresql://foodbot:pass@127.0.0.1/foodbot` |
+| `GEMINI_API_KEY`   | Google Gemini API key                                  | `AIza...`                                     |
+| `GEMINI_MODEL`     | Gemini model name                                      | `gemini-3.5-flash-lite`                       |
+| `USER_TIMEZONE`    | IANA timezone for meal detection                       | `Asia/Krasnoyarsk`                            |
+| `YAZIO_USER_AGENT` | User-Agent header (mimics Yazio iOS app)               | `YAZIO/26.31.0 ...`                           |
+
+> 💡 Yazio tokens (`access_token` + `refresh_token`) live in the database, not in `.env`. See the section below.
 
 ---
 
@@ -191,23 +196,27 @@ You can adjust these in `app/services/meals.py` → `detect_meal_type()`.
 
 ---
 
-## 🔑 How to Get Yazio Bearer Token
+## 🔑 How to Get Yazio Tokens
 
 > ⚠️ Yazio has no public API. The bot works by reverse-engineering the mobile app's HTTP traffic. Use at your own risk.
 
-You'll need to intercept your Yazio app traffic once to extract the bearer token.
+You need to intercept a token pair (`access_token` + `refresh_token`) from Yazio's OAuth endpoint once. After that, the bot refreshes tokens automatically — you won't need to touch mitmproxy again unless Yazio invalidates your session (e.g. after logout or password change).
 
-### Using mitmproxy (recommended)
+### Using mitmproxy
 
 1. Install mitmproxy:
+
    ```bash
    pip install mitmproxy
    ```
 
 2. Start it:
+
    ```bash
    mitmweb --listen-host 0.0.0.0 --listen-port 8080
    ```
+
+   > 💡 If you sign in to Yazio via Apple ID, add `--ignore-hosts '^(.*\.)?apple\.com:443$' --ignore-hosts '^(.*\.)?icloud\.com:443$'` — Apple's certificate pinning blocks mitmproxy otherwise.
 
 3. On your phone:
     - Connect to the same Wi-Fi as your computer
@@ -215,36 +224,33 @@ You'll need to intercept your Yazio app traffic once to extract the bearer token
     - Open `http://mitm.it` and install the CA certificate
     - Trust the certificate in system settings
 
-4. Open Yazio and add any food item
+4. Trigger a token refresh in the Yazio app. Easiest way — log out and log back in. You can also just wait until the app refreshes on its own (happens every ~48 hours).
 
 5. In mitmweb, find the request:
+
    ```
-   POST https://yzapi.yazio.com/v22/user/consumed-items
+   POST https://yzapi.yazio.com/v22/oauth/token
    ```
 
-6. Copy the `Authorization: Bearer <TOKEN>` value into your `.env`
+6. Copy `access_token` and `refresh_token` from the response body:
 
-### Token seeding (one-time)
+   ```json
+   {
+       "access_token": "...",
+       "refresh_token": "...",
+       "expires_in": 172800
+   }
+   ```
 
-Yazio tokens are refreshed automatically every ~48 hours. But for the very first run, you need to seed both `access_token` and `refresh_token` into the database.
+### Seed the tokens
 
-**Step 1.** Intercept a `POST /v22/oauth/token` request in mitmproxy (it fires when the app auto-refreshes on 401 — usually every couple of days when opening the app):
-
-```json
-{
-    "access_token": "...",
-    "refresh_token": "...",
-    "expires_in": 172800
-}
-```
-
-**Step 2.** Seed both tokens into the DB:
+Run once from the project root:
 
 ```bash
-./.venv/bin/python scripts/seed_yazio_tokens.py <access_token> <refresh_token>
+PYTHONPATH=. ./.venv/bin/python scripts/seed_yazio_tokens.py <access_token> <refresh_token>
 ```
 
-After this, the bot will refresh tokens on its own. You only need to reseed if Yazio invalidates your refresh token (e.g. after a password change or long inactivity).
+Done — the bot will keep tokens fresh automatically from now on.
 
 ---
 
@@ -266,6 +272,8 @@ YazioNutritionIntegrator/
 │   ├── models.py             # Domain models
 │   └── main.py               # FastAPI app + webhook
 ├── docs/                     # Screenshots for README
+├── scripts/
+│   └── seed_yazio_tokens.py  # One-time token seeder
 ├── install.sh                # One-command installer
 ├── uninstall.sh              # One-command uninstaller
 ├── Makefile                  # Convenience commands
