@@ -279,8 +279,8 @@ YazioNutritionIntegrator/
 
 ## 🗺️ Roadmap
 
+- [x] Automatic Yazio token refresh
 - [ ] Per-user Yazio credentials (bring-your-own-token)
-- [ ] Automatic Yazio token refresh
 - [ ] Meal reminders
 - [ ] Weekly / monthly summary
 - [ ] Image compression before Gemini upload
