@@ -3,7 +3,7 @@ fastapi>=0.115.0
 uvicorn[standard]>=0.30.6
 asyncpg>=0.29.0
 pydantic-settings>=2.4.0
-httpx[http2]>=0.27.2
+httpx[http2]>=0.28.1
 
 pre-commit>=3.8.0
 ruff>=0.16.2
