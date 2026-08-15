@@ -1,6 +1,6 @@
 aiogram>=3.13.1
 fastapi>=0.115.0
-uvicorn[standard]>=0.30.6
+uvicorn[standard]>=0.52.1
 asyncpg>=0.29.0
 pydantic-settings>=2.4.0
 httpx[http2]>=0.27.2
