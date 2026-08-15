@@ -4,6 +4,7 @@
 > diary — no subscription required.
 
 <p align="center">
+  <img src="https://github.com/bigit22/YazioNutritionIntegrator/actions/workflows/ci.yml/badge.svg" alt="CI">
   <img src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/aiogram-3.x-2CA5E0?logo=telegram&logoColor=white" alt="aiogram">
   <img src="https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white" alt="FastAPI">
@@ -223,14 +224,27 @@ You'll need to intercept your Yazio app traffic once to extract the bearer token
 
 6. Copy the `Authorization: Bearer <TOKEN>` value into your `.env`
 
-### Token expiration
+### Token seeding (one-time)
 
-Tokens don't last forever. When you see `⚠️ Not synced` errors in the bot with a 401 message, just repeat the
-extraction, update `YAZIO_BEARER_TOKEN` in `.env`, and run:
+Yazio tokens are refreshed automatically every ~48 hours. But for the very first run, you need to seed both `access_token` and `refresh_token` into the database.
+
+**Step 1.** Intercept a `POST /v22/oauth/token` request in mitmproxy (it fires when the app auto-refreshes on 401 — usually every couple of days when opening the app):
+
+```json
+{
+    "access_token": "...",
+    "refresh_token": "...",
+    "expires_in": 172800
+}
+```
+
+**Step 2.** Seed both tokens into the DB:
 
 ```bash
-make restart
+./.venv/bin/python scripts/seed_yazio_tokens.py <access_token> <refresh_token>
 ```
+
+After this, the bot will refresh tokens on its own. You only need to reseed if Yazio invalidates your refresh token (e.g. after a password change or long inactivity).
 
 ---
 

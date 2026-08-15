@@ -1,5 +1,5 @@
 import io
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
@@ -54,12 +54,10 @@ async def process_meal(msg: Message):
             image_bytes = buf.getvalue()
 
         user_text = msg.caption if msg.photo else msg.text
-        consumed_at = msg.date.replace(tzinfo=timezone.utc)
+        consumed_at = msg.date.replace(tzinfo=UTC)
         meal_type = detect_meal_type(consumed_at)
 
-        nutrition = await gemini_service.analyze(
-            user_text=user_text, image_bytes=image_bytes
-        )
+        nutrition = await gemini_service.analyze(user_text=user_text, image_bytes=image_bytes)
         meal = await repo.create_meal(
             telegram_user_id=msg.from_user.id,
             chat_id=msg.chat.id,
@@ -94,13 +92,9 @@ async def meal_callbacks(cb: CallbackQuery):
         return await cb.answer("Meal not found")
 
     if action == "copy":
-        await cb.message.edit_text(
-            format_copy_view(meal), reply_markup=back_keyboard(meal_id)
-        )
+        await cb.message.edit_text(format_copy_view(meal), reply_markup=back_keyboard(meal_id))
     elif action == "back":
-        await cb.message.edit_text(
-            format_meal_card(meal), reply_markup=meal_keyboard(meal)
-        )
+        await cb.message.edit_text(format_meal_card(meal), reply_markup=meal_keyboard(meal))
     elif action == "delete":
         await cb.message.edit_text(
             format_meal_card_delete_confirm(meal),
@@ -128,14 +122,12 @@ async def meal_callbacks(cb: CallbackQuery):
             await cb.answer(f"Sync failed: {e}", show_alert=True)
     elif action == "today":
         text = await _build_summary_text(cb.from_user.id)
-        await cb.message.edit_text(
-            text, reply_markup=summary_from_meal_keyboard(meal_id)
-        )
+        await cb.message.edit_text(text, reply_markup=summary_from_meal_keyboard(meal_id))
     await cb.answer()
 
 
 async def _build_summary_text(user_id: int) -> str:
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
     local_now = to_user_tz(now_utc)
     start_local = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
     end_local = start_local + timedelta(days=1)

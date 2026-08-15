@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     user_timezone: str = "Asia/Krasnoyarsk"
 
     yazio_base_url: str = "https://yzapi.yazio.com/v22"
-    yazio_bearer_token: str
+    yazio_bearer_token: str = ""
     yazio_notification_token: str = ""
     yazio_user_agent: str = (
         "YAZIO/26.31.0 (com.yazio.ios.YAZIO; build:2607310147; iOS 26.4.2) Alamofire/5.12.0"

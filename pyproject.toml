@@ -1,0 +1,27 @@
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+skip-string-normalization = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = [".venv", "docs"]
+
+[tool.ruff.lint]
+
+select = [
+    "E", # pycodestyle errors
+    "F", # pyflakes
+    "I", # isort (sort imports)
+    "UP", # pyupgrade
+    "B", # bugbear (catches likely bugs)
+    "SIM", # simplify
+]
+ignore = [
+    "E501", # line too long (black handles it)
+    "B008", # function calls in defaults (needed for FastAPI Depends etc)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
