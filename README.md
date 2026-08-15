@@ -5,6 +5,7 @@
 
 <p align="center">
   <img src="https://github.com/bigit22/YazioNutritionIntegrator/actions/workflows/ci.yml/badge.svg" alt="CI">
+  <img src="https://img.shields.io/github/v/release/bigit22/YazioNutritionIntegrator" alt="Release">
   <img src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/aiogram-3.x-2CA5E0?logo=telegram&logoColor=white" alt="aiogram">
   <img src="https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white" alt="FastAPI">
