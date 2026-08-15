@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class AuthMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: TelegramObject, data: dict):
         user_id = None
-        if isinstance(event, (Message, CallbackQuery)) and event.from_user:
+        if isinstance(event, (Message | CallbackQuery)) and event.from_user:
             user_id = event.from_user.id
 
         if user_id is None:

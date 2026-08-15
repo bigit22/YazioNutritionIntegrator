@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -63,7 +63,7 @@ def get_pool() -> asyncpg.Pool:
 def _parse_json(value: Any, default: Any) -> Any:
     if value is None:
         return default
-    if isinstance(value, (dict, list)):
+    if isinstance(value, (dict | list)):
         return value
     if isinstance(value, str):
         return json.loads(value)
@@ -84,9 +84,9 @@ def _row_to_meal(row: asyncpg.Record | None) -> dict | None:
         "carbs": row["carbs"],
         "portion_grams": row["portion_grams"],
         "items": _parse_json(row["items"], []),
-        "yazio_consumed_item_id": str(row["yazio_consumed_item_id"])
-        if row["yazio_consumed_item_id"]
-        else None,
+        "yazio_consumed_item_id": (
+            str(row["yazio_consumed_item_id"]) if row["yazio_consumed_item_id"] else None
+        ),
         "yazio_synced_at": row["yazio_synced_at"],
         "yazio_last_error": row["yazio_last_error"],
         "consumed_at": row["consumed_at"],
@@ -96,15 +96,15 @@ def _row_to_meal(row: asyncpg.Record | None) -> dict | None:
 
 class MealRepository:
     async def create_meal(
-            self,
-            *,
-            telegram_user_id: int,
-            chat_id: int,
-            source_message_id: int,
-            meal_type: str,
-            user_text: str | None,
-            nutrition: NutritionResult,
-            consumed_at: datetime,
+        self,
+        *,
+        telegram_user_id: int,
+        chat_id: int,
+        source_message_id: int,
+        meal_type: str,
+        user_text: str | None,
+        nutrition: NutritionResult,
+        consumed_at: datetime,
     ) -> dict:
         meal_id = uuid4()
         query = """
@@ -121,10 +121,17 @@ class MealRepository:
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 query,
-                meal_id, telegram_user_id, chat_id, source_message_id, meal_type,
-                nutrition.description, user_text,
-                float(nutrition.calories), float(nutrition.protein),
-                float(nutrition.fat), float(nutrition.carbs),
+                meal_id,
+                telegram_user_id,
+                chat_id,
+                source_message_id,
+                meal_type,
+                nutrition.description,
+                user_text,
+                float(nutrition.calories),
+                float(nutrition.protein),
+                float(nutrition.fat),
+                float(nutrition.carbs),
                 float(nutrition.portion_grams) if nutrition.portion_grams is not None else None,
                 json.dumps(nutrition.items),
                 nutrition.model_dump_json(),
@@ -137,7 +144,8 @@ class MealRepository:
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT * FROM meal_logs WHERE id = $1 AND telegram_user_id = $2 LIMIT 1",
-                UUID(meal_id), telegram_user_id,
+                UUID(meal_id),
+                telegram_user_id,
             )
         return _row_to_meal(row)
 
@@ -153,8 +161,9 @@ class MealRepository:
                     yazio_last_error = NULL
                 WHERE id = $1
                 """,
-                UUID(meal_id), UUID(remote_id),
-                datetime.now(timezone.utc),
+                UUID(meal_id),
+                UUID(remote_id),
+                datetime.now(UTC),
                 json.dumps(payload),
             )
 
@@ -163,7 +172,8 @@ class MealRepository:
         async with pool.acquire() as conn:
             await conn.execute(
                 "UPDATE meal_logs SET yazio_last_error = $2 WHERE id = $1",
-                UUID(meal_id), error_text[:500],
+                UUID(meal_id),
+                error_text[:500],
             )
 
     async def soft_delete_meal(self, meal_id: str) -> None:
@@ -171,11 +181,12 @@ class MealRepository:
         async with pool.acquire() as conn:
             await conn.execute(
                 "UPDATE meal_logs SET deleted_at = $2 WHERE id = $1",
-                UUID(meal_id), datetime.now(timezone.utc),
+                UUID(meal_id),
+                datetime.now(UTC),
             )
 
     async def list_day_meals(
-            self, telegram_user_id: int, start_dt: datetime, end_dt: datetime
+        self, telegram_user_id: int, start_dt: datetime, end_dt: datetime
     ) -> list[dict]:
         pool = get_pool()
         async with pool.acquire() as conn:
@@ -188,12 +199,14 @@ class MealRepository:
                   AND consumed_at < $3
                 ORDER BY consumed_at ASC
                 """,
-                telegram_user_id, start_dt, end_dt,
+                telegram_user_id,
+                start_dt,
+                end_dt,
             )
         return [_row_to_meal(r) for r in rows if r is not None]
 
     async def get_day_totals(
-            self, telegram_user_id: int, start_dt: datetime, end_dt: datetime
+        self, telegram_user_id: int, start_dt: datetime, end_dt: datetime
     ) -> dict:
         pool = get_pool()
         async with pool.acquire() as conn:
@@ -211,7 +224,9 @@ class MealRepository:
                   AND consumed_at >= $2
                   AND consumed_at < $3
                 """,
-                telegram_user_id, start_dt, end_dt,
+                telegram_user_id,
+                start_dt,
+                end_dt,
             )
         return {
             "calories": float(row["calories"]),

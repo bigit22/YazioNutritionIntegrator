@@ -38,16 +38,8 @@ def format_meal_card(meal: dict) -> str:
     emoji = {"breakfast": "🌅", "lunch": "☀️", "dinner": "🌙", "snack": "🍿"}.get(
         meal["meal_type"], "🍽️"
     )
-    sync = (
-        "✅ <b>Synced to Yazio</b>"
-        if meal.get("yazio_synced_at")
-        else "⚠️ <b>Not synced</b>"
-    )
-    err = (
-        f"\n<i>{escape(meal['yazio_last_error'])}</i>"
-        if meal.get("yazio_last_error")
-        else ""
-    )
+    sync = "✅ <b>Synced to Yazio</b>" if meal.get("yazio_synced_at") else "⚠️ <b>Not synced</b>"
+    err = f"\n<i>{escape(meal['yazio_last_error'])}</i>" if meal.get("yazio_last_error") else ""
 
     portion = ""
     if meal.get("portion_grams"):

@@ -41,11 +41,11 @@ class GeminiService:
         self._timeout = settings.request_timeout
 
     async def analyze(
-            self,
-            *,
-            user_text: str | None,
-            image_bytes: bytes | None = None,
-            mime_type: str = "image/jpeg",
+        self,
+        *,
+        user_text: str | None,
+        image_bytes: bytes | None = None,
+        mime_type: str = "image/jpeg",
     ) -> NutritionResult:
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
@@ -61,12 +61,14 @@ class GeminiService:
         parts.append({"text": prompt})
 
         if image_bytes is not None:
-            parts.append({
-                "inline_data": {
-                    "mime_type": mime_type,
-                    "data": base64.b64encode(image_bytes).decode("utf-8"),
+            parts.append(
+                {
+                    "inline_data": {
+                        "mime_type": mime_type,
+                        "data": base64.b64encode(image_bytes).decode("utf-8"),
+                    }
                 }
-            })
+            )
 
         payload = {
             "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},

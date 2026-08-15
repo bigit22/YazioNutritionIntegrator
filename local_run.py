@@ -8,7 +8,7 @@ from aiogram.enums import ParseMode
 from app.bot.handlers import router
 from app.bot.middleware import AuthMiddleware
 from app.config import settings
-from app.db import init_db, close_db
+from app.db import close_db, init_db
 
 logging.basicConfig(level=logging.INFO)
 
