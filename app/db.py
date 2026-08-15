@@ -36,6 +36,15 @@ CREATE TABLE IF NOT EXISTS meal_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_meal_logs_user_consumed_at
     ON meal_logs (telegram_user_id, consumed_at DESC);
+
+CREATE TABLE IF NOT EXISTS yazio_tokens (
+    id INTEGER PRIMARY KEY DEFAULT 1,
+    access_token TEXT NOT NULL,
+    refresh_token TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT single_row CHECK (id = 1)
+);
 """
 
 
@@ -235,3 +244,42 @@ class MealRepository:
             "carbs": float(row["carbs"]),
             "meal_count": int(row["meal_count"]),
         }
+
+
+class YazioTokensRepository:
+    async def get(self) -> dict | None:
+        pool = get_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT access_token, refresh_token, expires_at FROM yazio_tokens WHERE id = 1"
+            )
+        if row is None:
+            return None
+        return {
+            "access_token": row["access_token"],
+            "refresh_token": row["refresh_token"],
+            "expires_at": row["expires_at"],
+        }
+
+    async def upsert(
+        self,
+        access_token: str,
+        refresh_token: str,
+        expires_at: datetime,
+    ) -> None:
+        pool = get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO yazio_tokens (id, access_token, refresh_token, expires_at, updated_at)
+                VALUES (1, $1, $2, $3, now())
+                ON CONFLICT (id) DO UPDATE SET
+                    access_token = EXCLUDED.access_token,
+                    refresh_token = EXCLUDED.refresh_token,
+                    expires_at = EXCLUDED.expires_at,
+                    updated_at = now()
+                """,
+                access_token,
+                refresh_token,
+                expires_at,
+            )
