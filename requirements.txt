@@ -1,10 +1,10 @@
-aiogram>=3.30.0
-uvicorn[standard]>=0.52.1
-fastapi>=0.141.1
-asyncpg>=0.31.0
-pydantic-settings>=2.15.0
+aiogram>=3.31.0
+uvicorn[standard]>=0.54.0
+fastapi>=0.143.1
+asyncpg>=0.32.0
+pydantic-settings>=2.16.0
 httpx[http2]>=0.28.1
 
-pre-commit>=4.6.2
-ruff>=0.16.2
-black>=26.5.1
+pre-commit>=4.7.0
+ruff>=0.17.0
+black>=26.10.1
